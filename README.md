@@ -18,7 +18,6 @@ go get github.com/gentwolf-shen/gobatis
 ## 2. 初始化
 ```go
 import (
-	"database/sql"
 	"fmt"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/gentwolf-shen/gobatis"

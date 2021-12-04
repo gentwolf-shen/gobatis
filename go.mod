@@ -1,4 +1,4 @@
-module gobatis
+module github.com/gentwolf-shen/gobatis
 
 go 1.16
 
