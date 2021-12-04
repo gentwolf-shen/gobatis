@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mapper version="1.0">
+    <select id="List">
+        SELECT id,username,create_time,status FROM app_user
+        <where>
+            <if test="status != 0">status = #{status}</if>
+            <if test="username != ''">username LIKE CONCAT('%', #{username}, '%')</if>
+        </where>
+        ORDER BY id DESC
+        LIMIT #{limit}
+    </select>
+
+    <insert id="Insert">
+        INSERT INTO app_user(username,password,status,create_time)
+        VALUES(#{username},#{password},#{status},#{createTime})
+    </insert>
+
+    <update id="Update">
+        UPDATE app_user
+        <set>
+            <if test="username != ''">username = #{username}</if>
+            <if test="password != ''">password = #{password}</if>
+            <if test="status != 0">status = #{status}</if>
+        </set>
+        WHERE id = #{id}
+    </update>
+
+    <delete id="Delete">
+        DELETE FROM app_user WHERE id = #{id}
+    </delete>
+
+    <select id="Query">
+        SELECT id,username,status,create_time FROM app_user WHERE id = #{id}
+    </select>
+
+    <select id="QueryUsername">
+        SELECT username FROM app_user WHERE id = #{id}
+    </select>
+</mapper>
