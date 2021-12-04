@@ -26,7 +26,7 @@ import (
 
 ```go
 // 数据库配置请查看 github.com/jmoiron/sqlx
-config := DbConfig{
+config := gobatis.DbConfig{
     Driver:             "mysql",
     Dsn:                "username:password@tcp(mysqlhost:3306)/dbname?charset=utf8",
     MaxOpenConnections: 5,
@@ -36,7 +36,7 @@ config := DbConfig{
 }
 
 // gobatis对象
-app := NewGoBatis(config)
+app := gobatis.NewGoBatis(config)
 
 // 设置xml文件
 filename := "/path/to/your/mapper.xml"
@@ -89,7 +89,7 @@ type (
 var user User
 err := app.QueryObject(&user, "User.Query", map[string]interface{}{"id": 1})
 fmt.Println(err)
-fmt.Println(user
+fmt.Println(user)
 ```
 
 ## 6. 查询多条记录
