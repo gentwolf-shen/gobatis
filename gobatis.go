@@ -2,12 +2,13 @@ package gobatis
 
 import (
 	"errors"
-	"github.com/jmoiron/sqlx"
 	"io/ioutil"
 	"reflect"
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/jmoiron/sqlx"
 )
 
 var (
@@ -110,7 +111,6 @@ func (p *GoBatis) update(selector string, args map[string]interface{}) (int64, e
 			n, err = rs.LastInsertId()
 		} else {
 			n, err = rs.RowsAffected()
-			sugar.Info(n)
 		}
 		return err
 	})
