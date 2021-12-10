@@ -2,13 +2,13 @@
 
 <mapper version="1.0">
     <select id="List">
-        SELECT id,username,create_time,status FROM app_user
+        SELECT id,username,status,create_time,update_time FROM app_user
         <where>
-            <if test="status != 0">status = #{status}</if>
-            <if test="username != ''">username LIKE CONCAT('%', #{username}, '%')</if>
+            <if test="status != nil and status > 0">status = #{status}</if>
+            <if test="username != nil and username != ''">username LIKE CONCAT('%', #{username}, '%')</if>
         </where>
         ORDER BY id DESC
-        LIMIT #{limit}
+        <if test="limit != nil and limit > 0">LIMIT #{limit}</if>
     </select>
 
     <insert id="Insert">
@@ -19,9 +19,9 @@
     <update id="Update">
         UPDATE app_user
         <set>
-            <if test="username != ''">username = #{username}</if>
-            <if test="password != ''">password = #{password}</if>
-            <if test="status != 0">status = #{status}</if>
+            <if test="password != nil and password != ''">password = #{password}</if>
+            <if test="status > 0">status = #{status}</if>
+            <if>update_time = #{updateTime}</if>
         </set>
         WHERE id = #{id}
     </update>
@@ -31,10 +31,37 @@
     </delete>
 
     <select id="Query">
-        SELECT id,username,status,create_time FROM app_user WHERE id = #{id}
+        SELECT id,username,status,create_time,update_time FROM app_user WHERE id = #{id}
     </select>
 
     <select id="QueryUsername">
         SELECT username FROM app_user WHERE id = #{id}
+    </select>
+
+    <update id="UpdateForeach">
+        UPDATE app_user SET
+        <foreach collection="values" separator="," index="index" item="item">
+           ${index} = #{item}
+        </foreach>
+        where id = #{id}
+    </update>
+
+    <select id="QueryByIds">
+        SELECT id,username,status,create_time,update_time FROM app_user WHERE id IN
+        <foreach collection="ids" separator="," item="item" open="(" close=")">
+            #{item}
+        </foreach>
+    </select>
+
+    <select id="SelectTrim">
+        SELECT id,create_time,update_time
+        <trim suffixOverrides=",">
+            <if test="password != nil">,password,</if>
+        </trim>
+        FROM app_user
+        <trim prefix="WHERE" prefixOverrides="AND">
+            <if test="username != nil and username != ''">username LIKE CONCAT('%', #{username}, '%')</if>
+            <if test="status != nil and status > 0">AND status = #{status}</if>
+        </trim>
     </select>
 </mapper>

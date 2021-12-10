@@ -2,23 +2,15 @@ package gobatis
 
 import (
 	"errors"
+	"github.com/jmoiron/sqlx"
 	"io/ioutil"
-	"reflect"
-	"regexp"
 	"strings"
 	"time"
-
-	"github.com/jmoiron/sqlx"
-)
-
-var (
-	ptnParam    = regexp.MustCompile(`#{(.*?)}`)
-	ptnParamVar = regexp.MustCompile(`\${(.*?)}`)
 )
 
 type GoBatis struct {
 	db      *sqlx.DB
-	mappers map[string]*XmlParse
+	mappers map[string]*XmlParser
 }
 
 func NewGoBatis(cfg DbConfig) *GoBatis {
@@ -30,7 +22,7 @@ func NewGoBatis(cfg DbConfig) *GoBatis {
 	o.db.SetConnMaxIdleTime(time.Duration(cfg.MaxIdleConnections) * time.Second)
 	o.db.SetConnMaxLifetime(time.Duration(cfg.MaxLifeTime) * time.Second)
 
-	o.mappers = make(map[string]*XmlParse)
+	o.mappers = make(map[string]*XmlParser)
 
 	return o
 }
@@ -40,7 +32,7 @@ func (p *GoBatis) GetDb() *sqlx.DB {
 }
 
 func (p *GoBatis) LoadFromBytes(name string, bytes []byte) error {
-	parser := &XmlParse{}
+	parser := &XmlParser{}
 	if err := parser.LoadFromBytes(bytes); err != nil {
 		return err
 	}
@@ -61,7 +53,7 @@ func (p *GoBatis) LoadFromFile(name, filename string) error {
 	return p.LoadFromBytes(name, b)
 }
 
-func (p *GoBatis) exec(selector string, args map[string]interface{}, fun func(stmt *sqlx.NamedStmt) error) error {
+func (p *GoBatis) exec(selector string, inputValue map[string]interface{}, fun func(stmt *sqlx.NamedStmt, outputValue map[string]interface{}) error) error {
 	s, err := p.getSelector(selector)
 	if err != nil {
 		return err
@@ -72,37 +64,38 @@ func (p *GoBatis) exec(selector string, args map[string]interface{}, fun func(st
 		return errors.New("XML file \"" + s.Name + "\" is not exists!")
 	}
 
-	tsql, err := parser.Query(s.Id, args)
+	tsql, outputValue, err := parser.Query(s.Id, inputValue)
 	if err != nil {
 		return err
 	}
-	sugar.Info("raw SQL => ", tsql)
 
-	stmt, err1 := p.db.PrepareNamed(p.bindVar(tsql, args))
+	logger.Debug("raw SQL => \n", tsql)
+
+	stmt, err1 := p.db.PrepareNamed(tsql)
 	if err1 != nil {
 		return err1
 	}
-	sugar.Info("prepared SQL => ", stmt.QueryString)
+	logger.Debug("prepared SQL => \n", stmt.QueryString)
 
-	return fun(stmt)
+	return fun(stmt, outputValue)
 }
 
-func (p *GoBatis) QueryObject(value interface{}, selector string, args map[string]interface{}) error {
-	return p.exec(selector, args, func(stmt *sqlx.NamedStmt) error {
-		return stmt.Get(value, args)
+func (p *GoBatis) QueryObject(value interface{}, selector string, inputValue map[string]interface{}) error {
+	return p.exec(selector, inputValue, func(stmt *sqlx.NamedStmt, outputValue map[string]interface{}) error {
+		return stmt.Get(value, outputValue)
 	})
 }
 
-func (p *GoBatis) QueryObjects(value interface{}, selector string, args map[string]interface{}) error {
-	return p.exec(selector, args, func(stmt *sqlx.NamedStmt) error {
-		return stmt.Select(value, args)
+func (p *GoBatis) QueryObjects(value interface{}, selector string, inputValue map[string]interface{}) error {
+	return p.exec(selector, inputValue, func(stmt *sqlx.NamedStmt, outputValue map[string]interface{}) error {
+		return stmt.Select(value, outputValue)
 	})
 }
 
-func (p *GoBatis) update(selector string, args map[string]interface{}) (int64, error) {
+func (p *GoBatis) update(selector string, inputValue map[string]interface{}) (int64, error) {
 	var n int64 = 0
-	err := p.exec(selector, args, func(stmt *sqlx.NamedStmt) error {
-		rs, err := stmt.Exec(args)
+	err := p.exec(selector, inputValue, func(stmt *sqlx.NamedStmt, outputValue map[string]interface{}) error {
+		rs, err := stmt.Exec(outputValue)
 		if err != nil {
 			return err
 		}
@@ -117,16 +110,16 @@ func (p *GoBatis) update(selector string, args map[string]interface{}) (int64, e
 	return n, err
 }
 
-func (p *GoBatis) Insert(selector string, args map[string]interface{}) (int64, error) {
-	return p.update(selector, args)
+func (p *GoBatis) Insert(selector string, inputValue map[string]interface{}) (int64, error) {
+	return p.update(selector, inputValue)
 }
 
-func (p *GoBatis) Update(selector string, args map[string]interface{}) (int64, error) {
-	return p.update(selector, args)
+func (p *GoBatis) Update(selector string, inputValue map[string]interface{}) (int64, error) {
+	return p.update(selector, inputValue)
 }
 
-func (p *GoBatis) Delete(selector string, args map[string]interface{}) (int64, error) {
-	return p.update(selector, args)
+func (p *GoBatis) Delete(selector string, inputValue map[string]interface{}) (int64, error) {
+	return p.update(selector, inputValue)
 }
 
 func (p *GoBatis) getSelector(selector string) (*selectorEntity, error) {
@@ -139,22 +132,4 @@ func (p *GoBatis) getSelector(selector string) (*selectorEntity, error) {
 		Name: arr[0],
 		Id:   arr[1],
 	}, nil
-}
-
-func (p *GoBatis) bindVar(tsql string, args map[string]interface{}) string {
-	tsql = ptnParam.ReplaceAllStringFunc(tsql, func(s string) string {
-		return ":" + s[2:len(s)-1]
-	})
-
-	if args == nil {
-		return tsql
-	}
-
-	return ptnParamVar.ReplaceAllStringFunc(tsql, func(s string) string {
-		value := args[s[2:len(s)-1]]
-		if value == nil || reflect.TypeOf(value).String() != "string" {
-			return ""
-		}
-		return value.(string)
-	})
 }
