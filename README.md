@@ -191,7 +191,7 @@ fmt.Println(rowsAffected)
 ## 10. 设置自定义logger
 
 第三方logger需要实现的接口，github上的大部分库已支持。
-㮂具体的实现代码请查看 logger.go。
+具体的实现代码请查看 logger.go。
 
 ```go
 type ILogger interface {
