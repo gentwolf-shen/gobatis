@@ -3,13 +3,14 @@ package gobatis
 import (
 	"errors"
 	"fmt"
-	"github.com/antonmedv/expr"
-	"github.com/antonmedv/expr/vm"
-	"github.com/beevik/etree"
 	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/antonmedv/expr"
+	"github.com/antonmedv/expr/vm"
+	"github.com/beevik/etree"
 )
 
 type XmlParseForeach struct {
@@ -22,7 +23,7 @@ type XmlParseForeach struct {
 	index          int
 	ptnParamIndex  *regexp.Regexp
 	ptnParamItem   *regexp.Regexp
-	convertedValue map[string]interface{}
+	convertedValue []KeyValue
 	outputValue    map[string]interface{}
 }
 
@@ -42,9 +43,9 @@ func (b *XmlParseForeach) Build(el *etree.Element, inputValue map[string]interfa
 	arr := make([]string, len(b.convertedValue))
 
 	text := strings.TrimSpace(el.Text())
-	for k, v := range b.convertedValue {
-		str := b.replaceIndex(text, k, v)
-		str = b.replaceItem(str, v)
+	for _, v := range b.convertedValue {
+		str := b.replaceIndex(text, v.Key, v.Value)
+		str = b.replaceItem(str, v.Value)
 		arr[index] = str
 		index++
 	}
@@ -66,8 +67,7 @@ func (b *XmlParseForeach) getAttr(el *etree.Element) {
 	b.collectionAttr = el.SelectAttrValue("collection", "")
 }
 
-// 将collection关联的值转换为map[string]interface{}格式，方便处理
-// 如果是slice，转换后顺序可能会不对
+// 将collection关联的值转换为[]KeyValue{}格式，方便处理
 func (b *XmlParseForeach) convertValue(inputValue interface{}) error {
 	if b.collectionAttr == "" {
 		return errors.New("the attribute \"collection\" is not exists")
@@ -83,16 +83,18 @@ func (b *XmlParseForeach) convertValue(inputValue interface{}) error {
 		return nil
 	}
 
-	b.convertedValue = make(map[string]interface{})
 	values := reflect.ValueOf(p)
+	b.convertedValue = make([]KeyValue, values.Len())
 	kind := reflect.TypeOf(p).Kind()
 	if kind == reflect.Map {
+		index := 0
 		for _, v := range values.MapKeys() {
-			b.convertedValue[v.String()] = values.MapIndex(v).Interface()
+			b.convertedValue[index] = KeyValue{Key: v.String(), Value: values.MapIndex(v).Interface()}
+			index++
 		}
 	} else if kind == reflect.Slice {
 		for i := 0; i < values.Len(); i++ {
-			b.convertedValue[strconv.Itoa(i)] = values.Index(i).Interface()
+			b.convertedValue[i] = KeyValue{Key: strconv.Itoa(i), Value: values.Index(i).Interface()}
 		}
 	}
 

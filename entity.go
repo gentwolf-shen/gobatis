@@ -14,4 +14,9 @@ type (
 		MaxLifeTime        int    `json:"maxLifeTime"`
 		MaxIdleTime        int    `json:"maxIdleTime"`
 	}
+
+	KeyValue struct {
+		Key   string
+		Value interface{}
+	}
 )
