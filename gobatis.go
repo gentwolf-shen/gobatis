@@ -2,10 +2,11 @@ package gobatis
 
 import (
 	"errors"
-	"github.com/jmoiron/sqlx"
 	"io/ioutil"
 	"strings"
 	"time"
+
+	"github.com/jmoiron/sqlx"
 )
 
 type GoBatis struct {
@@ -53,7 +54,7 @@ func (p *GoBatis) LoadFromFile(name, filename string) error {
 	return p.LoadFromBytes(name, b)
 }
 
-func (p *GoBatis) exec(selector string, inputValue map[string]interface{}, fun func(stmt *sqlx.NamedStmt, outputValue map[string]interface{}) error) error {
+func (p *GoBatis) exec(selector string, inputValue map[string]interface{}, isSafe bool, fun func(stmt *sqlx.NamedStmt, outputValue map[string]interface{}) error) error {
 	s, err := p.getSelector(selector)
 	if err != nil {
 		return err
@@ -71,23 +72,41 @@ func (p *GoBatis) exec(selector string, inputValue map[string]interface{}, fun f
 
 	logger.Debug("raw SQL => \n", tsql)
 
-	stmt, err1 := p.db.PrepareNamed(tsql)
-	if err1 != nil {
-		return err1
+	var stmt *sqlx.NamedStmt
+	if isSafe {
+		stmt, err = p.db.PrepareNamed(tsql)
+	} else {
+		stmt, err = p.db.Unsafe().PrepareNamed(tsql)
+	}
+
+	if err != nil {
+		return err
 	}
 	logger.Debug("prepared SQL => \n", stmt.QueryString)
 
 	return fun(stmt, outputValue)
 }
 
-func (p *GoBatis) QueryObject(value interface{}, selector string, inputValue map[string]interface{}) error {
-	return p.exec(selector, inputValue, func(stmt *sqlx.NamedStmt, outputValue map[string]interface{}) error {
+func (p *GoBatis) QueryObjectUnsafe(value interface{}, selector string, inputValue map[string]interface{}) error {
+	return p.exec(selector, inputValue, false, func(stmt *sqlx.NamedStmt, outputValue map[string]interface{}) error {
 		return stmt.Get(value, outputValue)
 	})
 }
 
+func (p *GoBatis) QueryObject(value interface{}, selector string, inputValue map[string]interface{}) error {
+	return p.exec(selector, inputValue, true, func(stmt *sqlx.NamedStmt, outputValue map[string]interface{}) error {
+		return stmt.Get(value, outputValue)
+	})
+}
+
+func (p *GoBatis) QueryObjectsUnsafe(value interface{}, selector string, inputValue map[string]interface{}) error {
+	return p.exec(selector, inputValue, false, func(stmt *sqlx.NamedStmt, outputValue map[string]interface{}) error {
+		return stmt.Select(value, outputValue)
+	})
+}
+
 func (p *GoBatis) QueryObjects(value interface{}, selector string, inputValue map[string]interface{}) error {
-	return p.exec(selector, inputValue, func(stmt *sqlx.NamedStmt, outputValue map[string]interface{}) error {
+	return p.exec(selector, inputValue, true, func(stmt *sqlx.NamedStmt, outputValue map[string]interface{}) error {
 		return stmt.Select(value, outputValue)
 	})
 }
