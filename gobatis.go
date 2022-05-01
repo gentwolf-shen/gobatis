@@ -113,7 +113,7 @@ func (p *GoBatis) QueryObjects(value interface{}, selector string, inputValue ma
 
 func (p *GoBatis) update(selector string, inputValue map[string]interface{}) (int64, error) {
 	var n int64 = 0
-	err := p.exec(selector, inputValue, func(stmt *sqlx.NamedStmt, outputValue map[string]interface{}) error {
+	err := p.exec(selector, inputValue, true, func(stmt *sqlx.NamedStmt, outputValue map[string]interface{}) error {
 		rs, err := stmt.Exec(outputValue)
 		if err != nil {
 			return err
