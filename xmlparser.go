@@ -2,6 +2,7 @@ package gobatis
 
 import (
 	"errors"
+
 	"github.com/beevik/etree"
 )
 
@@ -15,15 +16,18 @@ func (xml *XmlParser) LoadFromBytes(bytes []byte) error {
 }
 
 // 从XML中解析出SQL，及绑定的参数
-func (xml *XmlParser) Query(id string, inputValue map[string]interface{}) (string, map[string]interface{}, error) {
+func (xml *XmlParser) Query(id string, inputValue map[string]interface{}) (*Queryer, error) {
+	q := &Queryer{}
+
 	item := xml.doc.FindElement("./mapper/*[@id='" + id + "']")
 	if item == nil {
-		return "", nil, errors.New("XML id \"" + id + "\" is not exists")
+		return q, errors.New("XML id \"" + id + "\" is not exists")
 	}
 
-	outputValue := make(map[string]interface{})
+	q.Value = make(map[string]interface{})
+	parser := NewXmlParserBuild(inputValue, q.Value)
 
-	parser := NewXmlParserBuild(inputValue, outputValue)
-	tsql, err := parser.Build(item)
-	return tsql, outputValue, err
+	var err error
+	q.Sql, err = parser.Build(item)
+	return q, err
 }

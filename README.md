@@ -26,10 +26,10 @@ import (
 
 func main() {
 	// 设置默认日志
-	SetDefaultLogger()
+	gobatis.SetDefaultLogger()
 
 	// 设置自定义日志，支持如：go.uber.org/zap，
-	// SetCustomLogger(logger)
+	// gobatis.SetCustomLogger(logger)
 
 	// ...
 }

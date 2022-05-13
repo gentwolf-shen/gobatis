@@ -6,6 +6,11 @@ type (
 		Id   string
 	}
 
+	Queryer struct {
+		Sql   string
+		Value map[string]interface{}
+	}
+
 	DbConfig struct {
 		Driver             string `json:"driver"`
 		Dsn                string `json:"dsn"`

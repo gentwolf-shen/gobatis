@@ -1,28 +1,33 @@
 package gobatis
 
 import (
+	"database/sql"
 	"errors"
 	"io/ioutil"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/jmoiron/sqlx"
 )
 
 type GoBatis struct {
+	lock    *sync.RWMutex
 	db      *sqlx.DB
 	mappers map[string]*XmlParser
+	stmts   sync.Map
 }
 
 func NewGoBatis(cfg DbConfig) *GoBatis {
 	o := &GoBatis{}
 
-	o.db = sqlx.MustOpen(cfg.Driver, cfg.Dsn)
+	o.db = sqlx.MustOpen(cfg.Driver, cfg.Dsn).Unsafe()
 	o.db.SetMaxIdleConns(cfg.MaxIdleConnections)
 	o.db.SetMaxOpenConns(cfg.MaxOpenConnections)
 	o.db.SetConnMaxIdleTime(time.Duration(cfg.MaxIdleConnections) * time.Second)
 	o.db.SetConnMaxLifetime(time.Duration(cfg.MaxLifeTime) * time.Second)
-
+	o.stmts = sync.Map{}
+	o.lock = &sync.RWMutex{}
 	o.mappers = make(map[string]*XmlParser)
 
 	return o
@@ -54,7 +59,7 @@ func (p *GoBatis) LoadFromFile(name, filename string) error {
 	return p.LoadFromBytes(name, b)
 }
 
-func (p *GoBatis) exec(selector string, inputValue map[string]interface{}, isSafe bool, fun func(stmt *sqlx.NamedStmt, outputValue map[string]interface{}) error) error {
+func (p *GoBatis) exec(selector string, inputValue map[string]interface{}, fun func(stmt *sqlx.NamedStmt, queryer *Queryer) error) error {
 	s, err := p.getSelector(selector)
 	if err != nil {
 		return err
@@ -65,61 +70,59 @@ func (p *GoBatis) exec(selector string, inputValue map[string]interface{}, isSaf
 		return errors.New("XML file \"" + s.Name + "\" is not exists!")
 	}
 
-	tsql, outputValue, err := parser.Query(s.Id, inputValue)
+	queryer, err := parser.Query(s.Id, inputValue)
 	if err != nil {
 		return err
 	}
 
-	logger.Debug("raw SQL => \n", tsql)
+	logger.Debug("raw SQL => \n", queryer.Sql)
 
-	var stmt *sqlx.NamedStmt
-	if isSafe {
-		stmt, err = p.db.PrepareNamed(tsql)
-	} else {
-		stmt, err = p.db.Unsafe().PrepareNamed(tsql)
+	if !strings.Contains(queryer.Sql, ":") {
+		return fun(nil, queryer)
 	}
 
+	stmt, err := p.getStmt(queryer)
 	if err != nil {
 		return err
 	}
-	logger.Debug("prepared SQL => \n", stmt.QueryString)
 
-	return fun(stmt, outputValue)
+	return fun(stmt, queryer)
 }
 
-func (p *GoBatis) QueryObjectUnsafe(value interface{}, selector string, inputValue map[string]interface{}) error {
-	return p.exec(selector, inputValue, false, func(stmt *sqlx.NamedStmt, outputValue map[string]interface{}) error {
-		return stmt.Get(value, outputValue)
+func (p *GoBatis) QueryObject(dest interface{}, selector string, inputValue map[string]interface{}) error {
+	return p.exec(selector, inputValue, func(stmt *sqlx.NamedStmt, queryer *Queryer) error {
+		if stmt == nil {
+			return p.db.Get(dest, queryer.Sql)
+		}
+		return stmt.Get(dest, queryer.Value)
 	})
 }
 
-func (p *GoBatis) QueryObject(value interface{}, selector string, inputValue map[string]interface{}) error {
-	return p.exec(selector, inputValue, true, func(stmt *sqlx.NamedStmt, outputValue map[string]interface{}) error {
-		return stmt.Get(value, outputValue)
-	})
-}
-
-func (p *GoBatis) QueryObjectsUnsafe(value interface{}, selector string, inputValue map[string]interface{}) error {
-	return p.exec(selector, inputValue, false, func(stmt *sqlx.NamedStmt, outputValue map[string]interface{}) error {
-		return stmt.Select(value, outputValue)
-	})
-}
-
-func (p *GoBatis) QueryObjects(value interface{}, selector string, inputValue map[string]interface{}) error {
-	return p.exec(selector, inputValue, true, func(stmt *sqlx.NamedStmt, outputValue map[string]interface{}) error {
-		return stmt.Select(value, outputValue)
+func (p *GoBatis) QueryObjects(dest interface{}, selector string, inputValue map[string]interface{}) error {
+	return p.exec(selector, inputValue, func(stmt *sqlx.NamedStmt, queryer *Queryer) error {
+		if stmt == nil {
+			return p.db.Select(dest, queryer.Sql)
+		}
+		return stmt.Select(dest, queryer.Value)
 	})
 }
 
 func (p *GoBatis) update(selector string, inputValue map[string]interface{}) (int64, error) {
 	var n int64 = 0
-	err := p.exec(selector, inputValue, true, func(stmt *sqlx.NamedStmt, outputValue map[string]interface{}) error {
-		rs, err := stmt.Exec(outputValue)
+	err := p.exec(selector, inputValue, func(stmt *sqlx.NamedStmt, queryer *Queryer) error {
+		var rs sql.Result
+		var err error
+		if stmt == nil {
+			rs, err = p.db.Exec(queryer.Sql, queryer.Value)
+		} else {
+			rs, err = stmt.Exec(queryer.Value)
+		}
+
 		if err != nil {
 			return err
 		}
 
-		if strings.ToUpper(stmt.QueryString[0:6]) == "INSERT" {
+		if strings.ToUpper(queryer.Sql[0:6]) == "INSERT" {
 			n, err = rs.LastInsertId()
 		} else {
 			n, err = rs.RowsAffected()
@@ -151,4 +154,32 @@ func (p *GoBatis) getSelector(selector string) (*selectorEntity, error) {
 		Name: arr[0],
 		Id:   arr[1],
 	}, nil
+}
+
+func (p *GoBatis) getStmt(queryer *Queryer) (*sqlx.NamedStmt, error) {
+	v, found := p.stmts.Load(queryer.Sql)
+	if found {
+		stmt := v.(*sqlx.NamedStmt)
+		return stmt, nil
+	}
+
+	p.lock.Lock()
+	v, found = p.stmts.Load(queryer.Sql)
+	if found {
+		stmt := v.(*sqlx.NamedStmt)
+		p.lock.Unlock()
+		return stmt, nil
+	}
+
+	var stmt *sqlx.NamedStmt
+	var err error
+	stmt, err = p.db.PrepareNamed(queryer.Sql)
+	if err != nil {
+		return nil, err
+	}
+	logger.Debug("prepared SQL => \n", stmt.QueryString)
+	p.stmts.Store(queryer.Sql, stmt)
+	p.lock.Unlock()
+
+	return stmt, err
 }

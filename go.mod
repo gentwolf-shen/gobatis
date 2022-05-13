@@ -1,5 +1,5 @@
-module github.com/gentwolf-shen/gobatis
-
+// module github.com/gentwolf-shen/gobatis
+module gobatis
 go 1.16
 
 require (
