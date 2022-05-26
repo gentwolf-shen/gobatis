@@ -2,6 +2,7 @@ package gobatis
 
 import (
 	"errors"
+	"strings"
 
 	"github.com/beevik/etree"
 )
@@ -26,6 +27,7 @@ func (xml *XmlParser) Query(id string, inputValue map[string]interface{}) (*Quer
 
 	q.Value = make(map[string]interface{})
 	parser := NewXmlParserBuild(inputValue, q.Value)
+	q.StatementType = strings.ToUpper(item.SelectAttrValue("statementType", "PREPARED"))
 
 	var err error
 	q.Sql, err = parser.Build(item)

@@ -75,9 +75,9 @@ func (p *GoBatis) exec(selector string, inputValue map[string]interface{}, fun f
 		return err
 	}
 
-	logger.Debug("raw SQL => \n", queryer.Sql)
+	logger.Debug("[", queryer.StatementType, "] raw SQL => \n", queryer.Sql)
 
-	if !strings.Contains(queryer.Sql, ":") {
+	if queryer.StatementType == "STATEMENT" {
 		return fun(nil, queryer)
 	}
 

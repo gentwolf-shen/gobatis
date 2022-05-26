@@ -7,8 +7,10 @@ type (
 	}
 
 	Queryer struct {
-		Sql   string
-		Value map[string]interface{}
+		Sql string
+		// PREPARED (default), STATEMENT
+		StatementType string
+		Value         map[string]interface{}
 	}
 
 	DbConfig struct {
