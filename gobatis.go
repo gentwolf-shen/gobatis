@@ -113,7 +113,7 @@ func (p *GoBatis) update(selector string, inputValue map[string]interface{}) (in
 		var rs sql.Result
 		var err error
 		if stmt == nil {
-			rs, err = p.db.Exec(queryer.Sql, queryer.Value)
+			rs, err = p.db.Exec(queryer.Sql)
 		} else {
 			rs, err = stmt.Exec(queryer.Value)
 		}
