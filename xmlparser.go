@@ -17,12 +17,12 @@ func (xml *XmlParser) LoadFromBytes(bytes []byte) error {
 }
 
 // 从XML中解析出SQL，及绑定的参数
-func (xml *XmlParser) Query(id string, inputValue map[string]interface{}) (*Queryer, error) {
+func (xml *XmlParser) Query(selector *selectorEntity, inputValue map[string]interface{}) (*Queryer, error) {
 	q := &Queryer{}
 
-	item := xml.doc.FindElement("./mapper/*[@id='" + id + "']")
+	item := xml.doc.FindElement("./mapper/*[@id='" + selector.Id + "']")
 	if item == nil {
-		return q, errors.New("XML id \"" + id + "\" is not exists")
+		return q, errors.New("XML id \"" + selector.Name + "." + selector.Id + "\" is not exists")
 	}
 
 	q.Value = make(map[string]interface{})

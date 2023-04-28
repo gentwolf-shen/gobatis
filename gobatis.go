@@ -70,7 +70,7 @@ func (p *GoBatis) exec(selector string, inputValue map[string]interface{}, fun f
 		return errors.New("XML file \"" + s.Name + "\" is not exists!")
 	}
 
-	queryer, err := parser.Query(s.Id, inputValue)
+	queryer, err := parser.Query(s, inputValue)
 	if err != nil {
 		return err
 	}
@@ -86,24 +86,42 @@ func (p *GoBatis) exec(selector string, inputValue map[string]interface{}, fun f
 		return err
 	}
 
+	logger.Debug("parameters =>\n", queryer.Value)
+
 	return fun(stmt, queryer)
 }
 
 func (p *GoBatis) QueryObject(dest interface{}, selector string, inputValue map[string]interface{}) error {
 	return p.exec(selector, inputValue, func(stmt *sqlx.NamedStmt, queryer *Queryer) error {
+		var err error
 		if stmt == nil {
-			return p.db.Get(dest, queryer.Sql)
+			err = p.db.Get(dest, queryer.Sql)
+		} else {
+			err = stmt.Get(dest, queryer.Value)
 		}
-		return stmt.Get(dest, queryer.Value)
+
+		if err != nil && err.Error() == "sql: no rows in result set" {
+			err = nil
+		}
+
+		return err
 	})
 }
 
 func (p *GoBatis) QueryObjects(dest interface{}, selector string, inputValue map[string]interface{}) error {
 	return p.exec(selector, inputValue, func(stmt *sqlx.NamedStmt, queryer *Queryer) error {
+		var err error
 		if stmt == nil {
-			return p.db.Select(dest, queryer.Sql)
+			err = p.db.Select(dest, queryer.Sql)
+		} else {
+			err = stmt.Select(dest, queryer.Value)
 		}
-		return stmt.Select(dest, queryer.Value)
+
+		if err != nil && err.Error() == "sql: no rows in result set" {
+			err = nil
+		}
+
+		return err
 	})
 }
 
@@ -177,6 +195,7 @@ func (p *GoBatis) getStmt(queryer *Queryer) (*sqlx.NamedStmt, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	logger.Debug("prepared SQL => \n", stmt.QueryString)
 	p.stmts.Store(queryer.Sql, stmt)
 	p.lock.Unlock()

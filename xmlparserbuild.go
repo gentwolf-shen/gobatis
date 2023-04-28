@@ -1,11 +1,12 @@
 package gobatis
 
 import (
-	"github.com/antonmedv/expr"
-	"github.com/beevik/etree"
 	"reflect"
 	"regexp"
 	"strings"
+
+	"github.com/antonmedv/expr"
+	"github.com/beevik/etree"
 )
 
 var (
