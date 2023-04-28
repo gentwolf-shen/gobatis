@@ -202,3 +202,13 @@ func (p *GoBatis) getStmt(queryer *Queryer) (*sqlx.NamedStmt, error) {
 
 	return stmt, err
 }
+
+func (p *GoBatis) Close() {
+	p.stmts.Range(func(_, v interface{}) bool {
+		stmt := v.(*sqlx.NamedStmt)
+		stmt.Close()
+		return true
+	})
+
+	p.db.Close()
+}
